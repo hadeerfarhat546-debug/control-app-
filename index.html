@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام حساب الكنترول التراكمي</title>
+<script src="./node_modules/xlsx/dist/xlsx.full.min.js"></script>
+<script src="./node_modules/jszip/dist/jszip.min.js"></script>
+<style>
+  :root{
+    --paper:#FAF7F0;
+    --ink:#1B3A34;
+    --ink-soft:#2E5148;
+    --line:#E1D8C2;
+    --gold:#A9822F;
+    --gold-soft:#F1E6C8;
+    --red:#A63A2E;
+    --red-soft:#F6E4E1;
+    --green-ok:#2E6B4F;
+    --green-ok-soft:#E4EFE7;
+    --card:#FFFFFF;
+    --muted:#6B6357;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:#20201C;
+    font-family:"Segoe UI","Tahoma",Arial,sans-serif;
+    line-height:1.6;
+  }
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px 60px;}
+  header.top{
+    background:var(--ink);
+    color:#F3EFE3;
+    padding:34px 20px 28px;
+    margin-bottom:28px;
+    border-bottom:4px solid var(--gold);
+  }
+  header.top .wrap{padding:0;}
+  header.top h1{
+    margin:0 0 6px;
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:.3px;
+  }
+  header.top p{
+    margin:0;
+    color:#CBD8D2;
+    font-size:14.5px;
+    max-width:640px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:22px;
+    margin-bottom:20px;
+  }
+  .card h2{
+    margin:0 0 4px;
+    font-size:17px;
+    color:var(--ink);
+  }
+  .card .hint{
+    color:var(--muted);
+    font-size:13.5px;
+    margin:0 0 16px;
+  }
+  .dropzone{
+    border:2px dashed var(--line);
+    border-radius:6px;
+    padding:30px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+    background:#FDFCF8;
+  }
+  .dropzone.drag{
+    border-color:var(--gold);
+    background:var(--gold-soft);
+  }
+  .dropzone strong{color:var(--ink-soft);}
+  .dropzone input{display:none;}
+  .dz-icon{font-size:28px;margin-bottom:8px;display:block;}
+
+  .filelist{margin-top:16px;display:flex;flex-direction:column;gap:8px;}
+  .file-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:10px 14px;border:1px solid var(--line);border-radius:5px;background:#FDFCF8;
+    font-size:14px;
+  }
+  .file-row .fname{color:var(--muted);font-size:12.5px;}
+  .file-row .fmeta{display:flex;flex-direction:column;gap:2px;}
+  .file-row .sname{font-weight:600;color:var(--ink);}
+  .badge{
+    font-size:12px;padding:3px 10px;border-radius:20px;white-space:nowrap;
+  }
+  .badge.ok{background:var(--green-ok-soft);color:var(--green-ok);}
+  .badge.warn{background:var(--red-soft);color:var(--red);font-weight:700;}
+  .badge.err{background:#EEE;color:#888;}
+  .remove-btn{
+    background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 6px;
+  }
+  .remove-btn:hover{color:var(--red);}
+
+  .actions{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(210px,1fr));
+    gap:12px;
+    margin-bottom:20px;
+  }
+  button.action{
+    background:var(--ink);
+    color:#F3EFE3;
+    border:none;
+    border-radius:5px;
+    padding:16px 14px;
+    font-size:14.5px;
+    font-weight:600;
+    cursor:pointer;
+    text-align:right;
+    transition:background .15s, transform .1s;
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+  }
+  button.action .sub{font-weight:400;font-size:12px;color:#C9D6D0;}
+  button.action:hover:not(:disabled){background:var(--ink-soft);}
+  button.action:active:not(:disabled){transform:scale(.98);}
+  button.action:disabled{background:#D8D2C4;color:#9C9584;cursor:not-allowed;}
+  button.action.gold{background:var(--gold);}
+  button.action.gold .sub{color:#FBF3DE;}
+  button.action.gold:hover:not(:disabled){background:#8F6E27;}
+
+  table.stats{
+    width:100%;
+    border-collapse:collapse;
+    font-size:14px;
+  }
+  table.stats th, table.stats td{
+    border:1px solid var(--line);
+    padding:9px 10px;
+    text-align:center;
+  }
+  table.stats th{
+    background:var(--ink);
+    color:#F3EFE3;
+    font-weight:600;
+    font-size:13px;
+  }
+  table.stats td.name-col{text-align:right;font-weight:600;}
+  tr.mismatch td{background:var(--red-soft);}
+  tr.mismatch td.flag{color:var(--red);font-weight:700;}
+  .status-ok{color:var(--green-ok);font-weight:600;}
+  .status-bad{color:var(--red);font-weight:700;}
+  .summary-line{
+    margin-top:14px;font-size:13.5px;color:var(--muted);
+  }
+  .empty-note{
+    color:var(--muted);font-size:14px;padding:10px 0;
+  }
+  footer{
+    color:var(--muted);
+    font-size:12.5px;
+    text-align:center;
+    padding:24px 0 10px;
+    border-top:1px solid var(--line);
+    margin-top:10px;
+  }
+  #log{font-size:12.5px;color:var(--muted);margin-top:10px;white-space:pre-line;}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <h1>نظام حساب الكنترول التراكمي</h1>
+    <p>ارفع ترانسكريبتات الطلاب (Excel) — النظام هيحسب الـ cGPA والنسبة المئوية تلقائيًا حسب قواعد الكنترول، ويقارنها بالمكتوب في كل ترانسكريبت.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="card">
+    <h2>١. رفع الترانسكريبتات</h2>
+    <p class="hint">الملفات هتتقرا بس ومحتواها الأصلي مش هيتغير أبدًا — إلا لما تختار تصدير نسخة محسوبة بنفسك.</p>
+    <div class="dropzone" id="dropzone">
+      <span class="dz-icon">📄</span>
+      <strong>اسحب الملفات هنا أو دوس هنا للاختيار</strong>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:6px;">يدعم .xlsx و .xls — تقدر تختار أكتر من ملف مرة واحدة</div>
+      <input type="file" id="fileInput" multiple accept=".xls,.xlsx">
+    </div>
+    <div class="filelist" id="fileList"></div>
+    <div id="log"></div>
+  </div>
+
+  <div class="card">
+    <h2>٢. الإجراءات</h2>
+    <p class="hint">الأزرار بتتفعّل بعد ما يتم تحليل ملف واحد على الأقل بنجاح.</p>
+    <div class="actions">
+      <button class="action" id="btnRename" disabled>
+        تصدير الملفات بأسماء جديدة
+        <span class="sub">نفس الملفات الأصلية، بدون أي تعديل، بس بإسم الطالب</span>
+      </button>
+      <button class="action gold" id="btnStats" disabled>
+        عرض النتيجة الإحصائية المجمعة
+        <span class="sub">مقارنة الـ cGPA المحسوب بالمكتوب في كل ترانسكريبت</span>
+      </button>
+      <button class="action" id="btnFinal" disabled>
+        تصدير الملف النهائي (Final Result)
+        <span class="sub">ملف تجميعي بفورمات FINAL_RESULT_FORMAT لكل الطلاب</span>
+      </button>
+      <button class="action" id="btnCalc" disabled>
+        تصدير الترانسكريبت المحسوب
+        <span class="sub">نسخة تفصيلية من كل ترانسكريبت بالمعادلات، باسم الطالب</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="card" id="statsCard" style="display:none;">
+    <h2>النتيجة الإحصائية المجمعة</h2>
+    <p class="hint">الصفوف المظللة باللون الأحمر يبقى فيها اختلاف بين الـ cGPA المحسوب والمكتوب في الترانسكريبت — محتاجة مراجعة.</p>
+    <div id="statsTableWrap"></div>
+    <div class="summary-line" id="statsSummary"></div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    المعادلة: نقاط الجودة × الساعات ÷ (إجمالي الساعات المكتسبة − ساعات مواد المعادلة TR) — مع اعتماد الدرجة الأعلى في مواد التحسين، واستبعاد مواد الرسوب المُعادة من حساب النسبة.
+  </div>
+</footer>
+
+<script>
+/* ============== Core parsing & calculation logic ============== */
+
+function readCell(ws, col, row) {
+  const v = ws[col + row];
+  if (v === undefined || v === null) return null;
+  return (typeof v === 'object' && 'v' in v) ? v.v : v;
+}
+
+function numToColLetter(n) {
+  let s = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
+
+function colLettersInRange(firstCol, lastCol) {
+  const letters = [];
+  for (let c = firstCol; c <= lastCol; c++) letters.push(numToColLetter(c));
+  return letters;
+}
+
+function parseWorkbookData(ws, range) {
+  const { firstRow, lastRow, firstCol, lastCol } = range;
+  let studentName = null, studentCode = null;
+  const semesterTitles = [];
+  const headerRows = [];
+  let summaryFinal = null;
+  const courseRows = [];
+  const allCols = colLettersInRange(firstCol, lastCol);
+
+  for (let row = firstRow; row <= lastRow; row++) {
+    const xVal = readCell(ws, 'X', row);
+    const cVal = readCell(ws, 'C', row);
+    const rVal = readCell(ws, 'R', row);
+
+    if (typeof xVal === 'string') {
+      if (xVal.includes('اسم الطالب')) studentName = String(readCell(ws, 'K', row) ?? '').trim();
+      if (xVal.includes('رقم الطالب')) studentCode = String(readCell(ws, 'K', row) ?? '').trim();
+    }
+    if (typeof rVal === 'string' && rVal.includes('الفصل الدراسي')) {
+      semesterTitles.push({ row, title: rVal });
+    }
+    if (cVal === 'التقدير') headerRows.push(row);
+
+    {
+      let qp = null, totalHours = null, transcriptCgpa = null, isSummaryRow = false;
+      for (const col of allCols) {
+        const cell = readCell(ws, col, row);
+        if (typeof cell === 'string') {
+          const t = cell.trim();
+          if (t.startsWith('إجمالي نقاط الجودة')) { isSummaryRow = true; qp = parseFloat(t.split(':')[1]); }
+          if (t.startsWith('الساعات المكتسبة')) totalHours = parseFloat(t.split(':')[1]);
+          if (t.includes('المعدل التراكم')) transcriptCgpa = parseFloat(t.split(':')[1]);
+        }
+      }
+      if (isSummaryRow) summaryFinal = { row, qualityPoints: qp, totalHours, transcriptCgpa };
+    }
+
+    const zVal = readCell(ws, 'Z', row);
+    const nVal = readCell(ws, 'N', row);
+    if (
+      typeof zVal === 'string' && zVal.trim() && zVal.trim() !== 'كود المقرر' &&
+      rVal != null && typeof nVal === 'number' && cVal !== 'التقدير'
+    ) {
+      const lVal = readCell(ws, 'L', row);
+      const mVal = readCell(ws, 'M', row);
+      courseRows.push({
+        row, code: zVal.trim(), grade: String(cVal ?? '').trim(),
+        L: typeof lVal === 'number' ? lVal : 0,
+        M: typeof mVal === 'number' ? mVal : null,
+        N: nVal, name: rVal
+      });
+    }
+  }
+  return { studentName, studentCode, semesterTitles, headerRows, summaryFinal, courseRows };
+}
+
+function computeResults(parsed) {
+  const { courseRows, summaryFinal, semesterTitles } = parsed;
+  const groups = {};
+  courseRows.forEach(cr => { (groups[cr.code] = groups[cr.code] || []).push(cr); });
+
+  const inclusion = {};
+  Object.values(groups).forEach(list => {
+    if (list.length === 1) {
+      inclusion[list[0].row] = { ak: true, am: true };
+    } else {
+      let best = list[0];
+      list.forEach(cr => { if (cr.L > best.L) best = cr; });
+      list.forEach(cr => {
+        if (cr === best) inclusion[cr.row] = { ak: true, am: true };
+        else if (cr.L === 0) inclusion[cr.row] = { ak: true, am: false };
+        else inclusion[cr.row] = { ak: false, am: false };
+      });
+    }
+  });
+
+  let excludedTRHours = 0, AK_total = 0, AM_total = 0;
+  courseRows.forEach(cr => {
+    if (cr.grade === 'TR') excludedTRHours += (cr.N || 0);
+    const inc = inclusion[cr.row] || { ak: true, am: true };
+    if (inc.ak) AK_total += (cr.L || 0) * (cr.N || 0);
+    if (inc.am) AM_total += (typeof cr.M === 'number' ? cr.M : 0) * (cr.N || 0);
+  });
+
+  const totalHours = summaryFinal ? summaryFinal.totalHours : 0;
+  const denominator = (totalHours || 0) - excludedTRHours;
+  const cgpaCalc = denominator ? AK_total / denominator : 0;
+  const percentCalc = denominator ? AM_total / denominator : 0;
+  const cgpaCalcRounded = Math.round(cgpaCalc * 100) / 100;
+  const percentCalcRounded = Math.round(percentCalc * 100) / 100;
+
+  const termCount = semesterTitles.filter(s => !s.title.includes('معادلة') && !s.title.includes('صيف')).length;
+
+  function letterFor(g) {
+    if (g >= 4.0) return { letter: 'A', desc: 'امتياز' };
+    if (g >= 3.7) return { letter: 'A-', desc: 'امتياز' };
+    if (g >= 3.3) return { letter: 'B+', desc: 'جيد جدا' };
+    if (g >= 3.0) return { letter: 'B', desc: 'جيد جدا' };
+    if (g >= 2.7) return { letter: 'C+', desc: 'جيد' };
+    if (g >= 2.3) return { letter: 'C', desc: 'جيد' };
+    if (g >= 2.0) return { letter: 'D', desc: 'مقبول' };
+    return { letter: 'F', desc: 'راسب' };
+  }
+  const { letter, desc } = letterFor(cgpaCalc);
+  const transcriptCgpa = summaryFinal ? summaryFinal.transcriptCgpa : null;
+  const mismatch = transcriptCgpa != null && Math.abs(cgpaCalcRounded - transcriptCgpa) > 0.005;
+
+  return {
+    AK_total, AM_total, denominator, excludedTRHours,
+    cgpaCalc, cgpaCalcRounded, percentCalc, percentCalcRounded,
+    termCount, letter, desc, mismatch, transcriptCgpa, totalHours, inclusion
+  };
+}
+
+function decodeRefRange(ref) {
+  const [a, b] = ref.split(':');
+  const parseAddr = (addr) => {
+    const m = addr.match(/^([A-Z]+)(\d+)$/);
+    let col = 0;
+    for (const ch of m[1]) col = col * 26 + (ch.charCodeAt(0) - 64);
+    return { col, row: parseInt(m[2], 10) };
+  };
+  const s = parseAddr(a), e = b ? parseAddr(b) : s;
+  return { firstRow: s.row, lastRow: e.row, firstCol: s.col, lastCol: e.col };
+}
+
+/* ============== Desktop saving helpers (Electron) ============== */
+async function saveBlob(name, blob) {
+  if (window.electronSave) {
+    const buf = await blob.arrayBuffer();
+    await window.electronSave.saveFile(name, new Uint8Array(buf));
+  } else if (window.saveAs) {
+    saveAs(blob, name);
+  } else {
+    alert('وضع الحفظ غير متاح في هذه البيئة.');
+  }
+}
+async function saveWorkbook(wb, name) {
+  if (window.electronSave) {
+    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    await window.electronSave.saveFile(name, new Uint8Array(out));
+  } else {
+    XLSX.writeFile(wb, name);
+  }
+}
+
+/* ============== App state & UI wiring ============== */
+
+const records = []; // {id, origName, ext, arrayBuffer, wb, ws, range, parsed, results, error}
+let seq = 0;
+
+const fileInput = document.getElementById('fileInput');
+const dropzone = document.getElementById('dropzone');
+const fileListEl = document.getElementById('fileList');
+const logEl = document.getElementById('log');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => { handleFiles(e.target.files); e.target.value = ''; });
+
+function log(msg) { logEl.textContent = msg; }
+
+async function handleFiles(fileList) {
+  const files = Array.from(fileList).filter(f => /\.(xlsx|xls)$/i.test(f.name));
+  if (!files.length) return;
+  for (const file of files) {
+    const id = ++seq;
+    const rec = { id, origName: file.name, ext: file.name.slice(file.name.lastIndexOf('.')), error: null };
+    records.push(rec);
+    try {
+      const buf = await file.arrayBuffer();
+      rec.arrayBuffer = buf;
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheetName = wb.SheetNames[0];
+      const ws = wb.Sheets[sheetName];
+      const range = decodeRefRange(ws['!ref']);
+      const parsed = parseWorkbookData(ws, range);
+      if (!parsed.summaryFinal || !parsed.courseRows.length) {
+        rec.error = 'تعذر التعرف على تركيبة الترانسكريبت';
+      } else {
+        rec.wb = wb; rec.ws = ws; rec.range = range;
+        rec.parsed = parsed;
+        rec.results = computeResults(parsed);
+      }
+    } catch (err) {
+      rec.error = 'تعذرت قراءة الملف (' + err.message + ')';
+    }
+  }
+  renderFileList();
+  updateButtons();
+}
+
+function renderFileList() {
+  fileListEl.innerHTML = '';
+  records.forEach(rec => {
+    const row = document.createElement('div');
+    row.className = 'file-row';
+    let badge, meta;
+    if (rec.error) {
+      badge = `<span class="badge err">تعذر التحليل</span>`;
+      meta = `<span class="sname">${rec.origName}</span><span class="fname">${rec.error}</span>`;
+    } else {
+      const r = rec.results;
+      const cls = r.mismatch ? 'warn' : 'ok';
+      const label = r.mismatch ? `⚠ اختلاف: ${r.cgpaCalcRounded} بدل ${r.transcriptCgpa}` : `مطابق — cGPA ${r.cgpaCalcRounded}`;
+      badge = `<span class="badge ${cls}">${label}</span>`;
+      meta = `<span class="sname">${rec.parsed.studentName || '(بدون اسم)'} — كود ${rec.parsed.studentCode || '-'}</span><span class="fname">${rec.origName}</span>`;
+    }
+    row.innerHTML = `<div class="fmeta">${meta}</div><div style="display:flex;align-items:center;gap:10px;">${badge}<button class="remove-btn" title="إزالة" data-id="${rec.id}">✕</button></div>`;
+    fileListEl.appendChild(row);
+  });
+  fileListEl.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = parseInt(btn.dataset.id, 10);
+      const idx = records.findIndex(r => r.id === id);
+      if (idx > -1) records.splice(idx, 1);
+      renderFileList();
+      updateButtons();
+      document.getElementById('statsCard').style.display = 'none';
+    });
+  });
+  log(records.length ? `تم تحميل ${records.length} ملف/ملفات.` : '');
+}
+
+function validRecords() { return records.filter(r => !r.error); }
+
+function updateButtons() {
+  const has = validRecords().length > 0;
+  document.getElementById('btnRename').disabled = !has;
+  document.getElementById('btnStats').disabled = !has;
+  document.getElementById('btnFinal').disabled = !has;
+  document.getElementById('btnCalc').disabled = !has;
+}
+
+function sanitizeFilename(name) {
+  return (name || 'طالب').replace(/[\\/:*?"<>|]/g, '_').trim() || 'طالب';
+}
+
+/* ---- Button 1: export original files renamed (byte-identical) ---- */
+document.getElementById('btnRename').addEventListener('click', async () => {
+  const list = validRecords();
+  const usedNames = {};
+  const makeName = (rec) => {
+    let base = sanitizeFilename(rec.parsed.studentName);
+    if (usedNames[base]) {
+      base = base + '_' + sanitizeFilename(rec.parsed.studentCode || String(rec.id));
+    }
+    usedNames[base] = true;
+    return base + rec.ext;
+  };
+  if (list.length === 1) {
+    const rec = list[0];
+    await saveBlob(makeName(rec), new Blob([rec.arrayBuffer]));
+    return;
+  }
+  const zip = new JSZip();
+  list.forEach(rec => zip.file(makeName(rec), rec.arrayBuffer));
+  const blob = await zip.generateAsync({ type: 'blob' });
+  await saveBlob('ترانسكريبتات_بأسماء_الطلاب.zip', blob);
+});
+
+/* ---- Button 2: show aggregated stats table ---- */
+document.getElementById('btnStats').addEventListener('click', () => {
+  const list = validRecords();
+  const wrap = document.getElementById('statsTableWrap');
+  let mismatchCount = 0;
+  let html = '<table class="stats"><thead><tr>' +
+    '<th>#</th><th>اسم الطالب</th><th>كود الطالب</th>' +
+    '<th>cGPA المحسوب</th><th>cGPA في الترانسكريبت</th><th>الحالة</th>' +
+    '</tr></thead><tbody>';
+  list.forEach((rec, i) => {
+    const r = rec.results, p = rec.parsed;
+    const mism = r.mismatch;
+    if (mism) mismatchCount++;
+    html += `<tr class="${mism ? 'mismatch' : ''}">` +
+      `<td>${i + 1}</td>` +
+      `<td class="name-col">${p.studentName || '-'}</td>` +
+      `<td>${p.studentCode || '-'}</td>` +
+      `<td class="${mism ? 'flag' : ''}">${r.cgpaCalcRounded}</td>` +
+      `<td class="${mism ? 'flag' : ''}">${r.transcriptCgpa != null ? r.transcriptCgpa : '-'}</td>` +
+      `<td>${mism ? '⚠ اختلاف — محتاج مراجعة' : '<span class="status-ok">مطابق</span>'}</td>` +
+      `</tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  document.getElementById('statsSummary').textContent =
+    `إجمالي ${list.length} طالب — ${mismatchCount} حالة اختلاف عن الترانسكريبت الأصلي.`;
+  document.getElementById('statsCard').style.display = 'block';
+  document.getElementById('statsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+
+/* ---- Button 3: export FINAL_RESULT_FORMAT-style summary ---- */
+document.getElementById('btnFinal').addEventListener('click', async () => {
+  const list = validRecords();
+  const header = ['م', 'كود الطالب', 'اسم الطالب', 'الساعات المكتسبة الكليه', 'الساعات الإجبارى',
+    'الساعات الإختيارى', 'المعدل التراكمي', 'التقدير العام', 'التقدير المكافئ',
+    'الدرجة العظمي', 'المجموع التراكمى', 'عدد الترمات', 'النسبة '];
+  const rows = [header];
+  list.forEach((rec, i) => {
+    const r = rec.results, p = rec.parsed;
+    rows.push([
+      i + 1,
+      p.studentCode || '',
+      p.studentName || '',
+      r.totalHours || 190,
+      186,
+      4,
+      r.cgpaCalcRounded,
+      r.letter,
+      r.desc,
+      r.denominator * 100,
+      Math.round(r.AM_total * 10) / 10,
+      r.termCount,
+      r.percentCalcRounded
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{ wch: 4 }, { wch: 12 }, { wch: 16 }, { wch: 22 }, { wch: 16 },
+    { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 16 }, { wch: 10 }, { wch: 8 }];
+  const wb = XLSX.utils.book_new();
+  wb.Workbook = { Views: [{ RTL: true }] };
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+  await saveWorkbook(wb, 'ملخص_نتائج_الطلاب.xlsx');
+});
+
+/* ---- Button 4: export calculated transcript per student (with formulas) ---- */
+document.getElementById('btnCalc').addEventListener('click', async () => {
+  const list = validRecords();
+
+  function buildCalculatedWb(rec) {
+    const newWs = JSON.parse(JSON.stringify(rec.ws));
+    const { courseRows } = rec.parsed;
+    const inclusion = rec.results.inclusion;
+    courseRows.forEach(cr => {
+      const inc = inclusion[cr.row] || { ak: true, am: true };
+      if (inc.ak) newWs['AK' + cr.row] = { t: 'n', f: `L${cr.row}*N${cr.row}` };
+      if (inc.am) newWs['AM' + cr.row] = { t: 'n', f: `M${cr.row}*N${cr.row}` };
+    });
+    const rowsNums = courseRows.map(c => c.row);
+    const firstRow = Math.min(...rowsNums), lastRow = Math.max(...rowsNums);
+    const totalRow = lastRow + 2, divRow = totalRow + 1;
+    newWs['AJ' + totalRow] = { t: 's', v: 'الإجمالي' };
+    newWs['AK' + totalRow] = { t: 'n', f: `SUM(AK${firstRow}:AK${lastRow})` };
+    newWs['AM' + totalRow] = { t: 'n', f: `SUM(AM${firstRow}:AM${lastRow})` };
+    newWs['AJ' + divRow] = { t: 's', v: 'cGPA / النسبة%' };
+    newWs['AK' + divRow] = { t: 'n', f: `AK${totalRow}/${rec.results.denominator}` };
+    newWs['AM' + divRow] = { t: 'n', f: `AM${totalRow}/${rec.results.denominator}` };
+
+    const range = XLSX.utils.decode_range(newWs['!ref']);
+    range.e.r = Math.max(range.e.r, divRow - 1);
+    range.e.c = Math.max(range.e.c, 38);
+    newWs['!ref'] = XLSX.utils.encode_range(range);
+
+    const newWb = XLSX.utils.book_new();
+    newWb.Workbook = { Views: [{ RTL: true }] };
+    XLSX.utils.book_append_sheet(newWb, newWs, 'Sheet1');
+    return newWb;
+  }
+
+  if (list.length === 1) {
+    const rec = list[0];
+    const wb = buildCalculatedWb(rec);
+    await saveWorkbook(wb, sanitizeFilename(rec.parsed.studentName) + '_ترانسكريبت_محسوب.xlsx');
+    return;
+  }
+
+  const zip = new JSZip();
+  const usedNames = {};
+  list.forEach(rec => {
+    const wb = buildCalculatedWb(rec);
+    const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+    let base = sanitizeFilename(rec.parsed.studentName);
+    if (usedNames[base]) base = base + '_' + sanitizeFilename(rec.parsed.studentCode || String(rec.id));
+    usedNames[base] = true;
+    zip.file(base + '_ترانسكريبت_محسوب.xlsx', out);
+  });
+  const blob = await zip.generateAsync({ type: 'blob' });
+  await saveBlob('ترانسكريبتات_محسوبة.zip', blob);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "name": "control-gpa-app",
+  "version": "1.0.0",
+  "description": "نظام حساب الكنترول التراكمي - نسخة سطح المكتب",
+  "main": "main.js",
+  "author": "Control App",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "dependencies": {
+    "xlsx": "0.18.5",
+    "jszip": "3.10.1"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.control.gpacalculator",
+    "productName": "نظام حساب الكنترول",
+    "directories": { "output": "dist" },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "نظام حساب الكنترول"
+    }
+  }
+}
